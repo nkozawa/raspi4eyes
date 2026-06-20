@@ -7,7 +7,7 @@
 # English
 
 A Python-based utility for Raspberry Pi to capture up to 4 UVC video inputs (typically FPV drone receivers like EACHINE ROTG01 PRO) and tile them in a 2x2 grid layout on a single HDMI output.  
-*(Tested and verified on **Raspberry Pi 4B** and **Raspberry Pi 5**)*
+*(Tested and verified on **Raspberry Pi 4B** and **Raspberry Pi 5**. Also runs on **Windows 10/11**.)*
 
 This project aims to replicate a multi-receiver display system similar to the **HDZero Event VRX** or **Hawkeye Firefly Four Eyes**.
 
@@ -20,6 +20,7 @@ This project aims to replicate a multi-receiver display system similar to the **
 - **No-Signal Blackout (Anti-Static Screen)**: When a drone is powered off, the receiver outputs static snow noise. This tool analyzes the frames and replaces the static noise with a clean black screen.
   - *HDZero Event VRX Style*: Modeled after the similar black-screen feature of the HDZero Event VRX.
   - *ArUco Optimization (CPU Load & False Detections)*: When using tracking software like **FPVTrackSide**, static noise forces the image processor to scan millions of random edges, causing CPU spikes and dropping the system's processing FPS. Suppressing the noise into a flat black screen dramatically reduces CPU load and stabilizes the overall frame rate.
+- **Cross-Platform (Linux & Windows)**: Automatically selects the capture backend per OS (V4L2 on Linux, DirectShow on Windows). On Windows, cameras are selected and followed by **device name**.
 - **Robust Auto-Reconnect**: Automatically attempts to reconnect to devices if they are disconnected mid-run or not powered on at startup.
 - **Bandwidth Band-aid (MJPEG)**: Forces MJPEG capture format to bypass the USB controller bandwidth limitation (`No space left on device`) common on Raspberry Pi.
 - **Text-Configurable**: Easily tweak device paths, window modes, noise levels, and resolutions using a JSON configuration file.
@@ -55,6 +56,28 @@ sudo apt update
 sudo apt install -y python3-opencv python3-numpy
 ```
 
+### Windows
+
+The same script also runs on Windows using the **DirectShow** backend. Cameras are selected by **device name** instead of `/dev/video*` paths.
+
+```powershell
+# In the project folder (PowerShell)
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+pip install -r requirements.txt
+python raspi4eyes.py
+```
+
+Or use the included batch files:
+
+- **`setup.bat`** — creates the venv and installs dependencies (run once)
+- **`run.bat`** — launches the app (arguments pass through, e.g. `run.bat --windowed`)
+
+Notes:
+- `DISPLAY=:0` is **not** required on Windows.
+- Camera enumeration uses **`pygrabber`**, which is installed automatically by `requirements.txt` on Windows.
+- If PowerShell blocks `Activate.ps1`, run `Set-ExecutionPolicy -Scope CurrentUser RemoteSigned` once.
+
 ---
 
 ## Usage
@@ -67,7 +90,7 @@ Ensure the virtual environment is active before running the script:
 export XAUTHORITY=~/.Xauthority
 DISPLAY=:0 python raspi4eyes.py
 ```
-*Specifying `DISPLAY=:0` is critical for OpenCV to access the X11/Wayland display server when executing from an SSH terminal or automated scripts.*
+*Specifying `DISPLAY=:0` is critical for OpenCV to access the X11/Wayland display server when executing from an SSH terminal or automated scripts. (On Windows this is not needed — just `python raspi4eyes.py` or `run.bat`.)*
 
 ### Key Bindings
 - Press `q` or `ESC` in the display window to safely stop the threads and exit the program.
@@ -105,17 +128,21 @@ On the first execution, `config.json` will be automatically generated.
     "noise_threshold": 0.4
 }
 ```
+*On Windows, the generated `devices` default to numeric indices (`[0, 1, 2, 3]`) and a `"windows_device_name"` key is added (see below).*
 
 ### Settings Table
 
 | Key | Description | Default |
 | :--- | :--- | :--- |
 | `devices` | List of video device paths or index numbers. | `["/dev/video0", ...]` |
+| `windows_device_name` | **(Windows only)** Camera name to auto-select (substring match). The top 4 matching cameras are used and followed by name at runtime; ignored on Linux. | `"USB2.0 PC CAMERA"` |
 | `width` / `height` | Capture resolution for each camera. | `640` / `480` |
 | `fullscreen` | Start the application in fullscreen mode. | `true` |
 | `use_mjpeg` | Request MJPEG compression to save USB bandwidth. | `true` |
 | `detect_noise` | Automatically detect static noise and blackout the grid. | `true` |
 | `noise_threshold` | Threshold ratio for static noise detection (`0.0` - `1.0`). | `0.4` |
+
+> **Windows device selection**: When `windows_device_name` is set, the app lists all DirectShow cameras at startup, selects up to 4 whose name contains that string, and keeps **following them by name at runtime** (handling reconnects and cameras plugged in later). It does **not** fall back to numeric indices. Set `windows_device_name` to `""` to use the numeric `devices` list instead.
 
 ---
 
@@ -140,7 +167,7 @@ If your receivers fail to blackout or get stuck on a black screen, run with `--d
 # 日本語
 
 Raspberry Piで最大4つのUVCビデオ入力（EACHINE ROTG01 PROなどのFPVドローン用受信機）をキャプチャし、HDMI出力に2x2のグリッド配置で並べて表示するPythonプログラムです。  
-*(**Raspberry Pi 4B** および **Raspberry Pi 5** にて実機動作確認済み)*
+*(**Raspberry Pi 4B** および **Raspberry Pi 5** にて実機動作確認済み。**Windows 10/11** でも動作します。)*
 
 **HDZero Event VRX** や **Hawkeye Firefly Four Eyes** のような、イベントやレース向けの複数受信機表示画面を構築することを目的としています。
 
@@ -153,6 +180,7 @@ Raspberry Piで最大4つのUVCビデオ入力（EACHINE ROTG01 PROなどのFPV�
 - **無信号時の黒画面化（砂嵐の除去）**: ドローン本体の電源が切れている時、受信機は砂嵐（スノーノイズ）を出力します。本ツールは画像解析でノイズを検知し、自動的に該当画面を綺麗な黒画面（「No Signal」）に置き換えます。
   - *HDZero Event VRX仕様*: 同種製品であるHDZero Event VRXの無信号時黒画面化機能を目標に設計。
   - *ArUcoトリガーの最適化（処理負荷軽減と誤検出防止）*: **FPVTrackSide** などの画像認識エンジンに入力する際、砂嵐画面に対して画像認識を実行すると、無数のノイズが輪郭（エッジ）と判定されてCPU負荷が跳ね上がり、システム全体のFPSが著しく低下してしまいます。無信号部分を平坦な黒画面にすることで、画像処理負荷を劇的に軽減し、FPSを安定・維持させます。
+- **クロスプラットフォーム対応 (Linux / Windows)**: OSに応じてキャプチャバックエンドを自動選択します（Linux=V4L2、Windows=DirectShow）。Windows ではカメラを**デバイス名**で選択・追従します。
 - **自動再接続機能**: 起動時にデバイスが接続されていない場合や、動作中にケーブルが抜けた場合でも、自動的にデバイスの再初期化・再接続を試み続けます。
 - **USB帯域幅の制限対策 (MJPEG)**: Raspberry Piで複数カメラ接続時に発生しやすい帯域不足エラー（`No space left on device`）を避けるため、MJPEG圧縮形式での入力を優先します。
 - **JSONによる簡単な設定**: デバイスパス、表示解像度、ウィンドウ設定、砂嵐の感度などを `config.json` から変更可能です。
@@ -188,6 +216,28 @@ sudo apt update
 sudo apt install -y python3-opencv python3-numpy
 ```
 
+### Windows
+
+同じスクリプトは Windows でも動作し、**DirectShow** バックエンドを使用します。カメラは `/dev/video*` パスではなく**デバイス名**で選択します。
+
+```powershell
+# プロジェクトフォルダ内で (PowerShell)
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+pip install -r requirements.txt
+python raspi4eyes.py
+```
+
+付属のバッチファイルでも実行できます:
+
+- **`setup.bat`** — venv作成と依存パッケージのインストール（初回のみ）
+- **`run.bat`** — アプリ起動（引数はそのまま渡されます。例: `run.bat --windowed`）
+
+補足:
+- Windows では `DISPLAY=:0` は不要です。
+- カメラ列挙には **`pygrabber`** を使用し、Windows では `requirements.txt` で自動インストールされます。
+- PowerShell で `Activate.ps1` が拒否される場合は、一度 `Set-ExecutionPolicy -Scope CurrentUser RemoteSigned` を実行してください。
+
 ---
 
 ## 使用方法
@@ -200,7 +250,7 @@ sudo apt install -y python3-opencv python3-numpy
 export XAUTHORITY=~/.Xauthority
 DISPLAY=:0 python raspi4eyes.py
 ```
-*※ `DISPLAY=:0` の指定は、SSHターミナルや自動起動スクリプトからOpenCVを実行し、X11/Waylandディスプレイサーバー上にウィンドウを表示するために必須です。*
+*※ `DISPLAY=:0` の指定は、SSHターミナルや自動起動スクリプトからOpenCVを実行し、X11/Waylandディスプレイサーバー上にウィンドウを表示するために必須です。（Windows では不要で、`python raspi4eyes.py` または `run.bat` で起動します。）*
 
 ### 操作方法
 - 表示ウィンドウ上で `q` キーまたは `ESC` キーを押すと、すべてのスレッドを安全にクリーンアップして終了します。
@@ -238,17 +288,21 @@ DISPLAY=:0 python raspi4eyes.py --debug-noise
     "noise_threshold": 0.4
 }
 ```
+*※ Windows では `devices` の既定値が数値インデックス（`[0, 1, 2, 3]`）になり、`"windows_device_name"` キーが追加されます（下記参照）。*
 
 ### 設定項目一覧
 
 | 項目名 | 説明 | デフォルト値 |
 | :--- | :--- | :--- |
 | `devices` | キャプチャするビデオデバイスのパスまたは番号のリスト。 | `["/dev/video0", ...]` |
+| `windows_device_name` | **(Windowsのみ)** 自動選択するカメラのデバイス名（部分一致）。一致した上位4台を使用し、実行時も名前で追従する。Linuxでは無視。 | `"USB2.0 PC CAMERA"` |
 | `width` / `height` | 各カメラのキャプチャ解像度。 | `640` / `480` |
 | `fullscreen` | フルスクリーン表示で起動するか。 | `true` |
 | `use_mjpeg` | USB帯域幅を節約するため、MJPEG圧縮を要求するか。 | `true` |
 | `detect_noise` | 砂嵐（ノイズ）の検知・自動黒画面化を有効にするか。 | `true` |
 | `noise_threshold` | 砂嵐を判定する閾値比率（`0.0` 〜 `1.0`）。 | `0.4` |
+
+> **Windowsのデバイス選択**: `windows_device_name` を設定すると、起動時に全 DirectShow カメラを列挙し、名前にその文字列を含むカメラを最大4台選択して、**実行時も名前で追従**します（再接続や後から接続したカメラにも対応）。インデックス番号へはフォールバックしません。数値の `devices` を使いたい場合は `windows_device_name` を `""` にしてください。
 
 ---
 

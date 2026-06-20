@@ -10,18 +10,44 @@ import json
 import time
 import threading
 import argparse
+import platform
 import numpy as np
 import cv2
+
+# OS判定
+IS_WINDOWS = (os.name == "nt")
+IS_LINUX = sys.platform.startswith("linux")
+
+# OS依存のキャプチャバックエンド
+# WindowsはDirectShow、LinuxはV4L2を明示的に指定する。
+# (MJPEG圧縮の要求や解像度設定を確実に効かせ、想定外のバックエンド選択を避けるため)
+if IS_WINDOWS:
+    CAPTURE_BACKEND = cv2.CAP_DSHOW
+    BACKEND_NAME = "DirectShow"
+elif IS_LINUX:
+    CAPTURE_BACKEND = cv2.CAP_V4L2
+    BACKEND_NAME = "V4L2"
+else:
+    CAPTURE_BACKEND = cv2.CAP_ANY
+    BACKEND_NAME = "Auto"
+
+# Windowsでデフォルト選択するカメラのデバイス名
+DEFAULT_WINDOWS_DEVICE_NAME = "USB2.0 PC CAMERA"
+
+# OS依存のデフォルトデバイス
+# Windowsはカメラのインデックス番号（名前解決失敗時のフォールバック）、Linuxは /dev/video パス。
+if IS_WINDOWS:
+    DEFAULT_DEVICES = [0, 1, 2, 3]
+else:
+    DEFAULT_DEVICES = ["/dev/video0", "/dev/video2", "/dev/video4", "/dev/video6"]
 
 # デフォルト設定
 DEFAULT_CONFIG_FILE = "config.json"
 DEFAULT_CONFIG = {
-    "devices": [
-        "/dev/video0",
-        "/dev/video2",
-        "/dev/video4",
-        "/dev/video6"
-    ],
+    "devices": DEFAULT_DEVICES,
+    # Windowsのみ有効。空でなければ、この名前(部分一致)のカメラを上位から最大4台自動選択し
+    # devices より優先する。Linuxでは無視される。
+    "windows_device_name": DEFAULT_WINDOWS_DEVICE_NAME if IS_WINDOWS else "",
     "width": 640,
     "height": 480,
     "fps": 30,
@@ -32,16 +58,90 @@ DEFAULT_CONFIG = {
     "noise_threshold": 0.4
 }
 
+
+def list_windows_cameras():
+    """DirectShowのビデオ入力デバイスを列挙し [(index, name), ...] を返す。
+    pygrabber が未導入の場合は None を返す（0台検出の [] とは区別する）。"""
+    try:
+        from pygrabber.dshow_graph import FilterGraph
+        names = FilterGraph().get_input_devices()
+        return list(enumerate(names))
+    except ImportError:
+        return None
+    except Exception as e:
+        print(f"カメラの列挙に失敗しました: {e}", file=sys.stderr)
+        return []
+
+
+class DeviceSource:
+    """カメラの「開くべきデバイスID」を供給する抽象。
+    CameraThread はこのインターフェース越しにデバイスを取得/解放するだけでよく、
+    OSや取得方式（固定 index/path か、名前による動的解決か）を意識しない。"""
+
+    def acquire(self, owner):
+        """開くべき dev_id (int または path) を返す。利用不可なら None。"""
+        raise NotImplementedError
+
+    def release(self, owner):
+        """owner が確保していたデバイスを解放する。"""
+        pass
+
+
+class FixedDeviceSource(DeviceSource):
+    """固定の index/path を返すソース（Linux の /dev/video や明示インデックス用）。
+    スレッドごとに1つ持つ。常に同じ dev_id を返すだけで、解放は何もしない。"""
+
+    def __init__(self, device):
+        try:
+            self.dev_id = int(device)
+        except (ValueError, TypeError):
+            self.dev_id = device
+
+    def acquire(self, owner):
+        return self.dev_id
+
+
+class NameResolvedSource(DeviceSource):
+    """デバイス名一致のカメラインデックスを実行時に動的割り当てするソース（Windows用）。
+    全スレッドで1インスタンスを共有し、二重取得を防止する。起動後の切断/再接続や、
+    後から接続されたカメラにも追従する。"""
+
+    def __init__(self, name, max_count=4):
+        self.name_l = name.lower()
+        self.max_count = max_count
+        self.lock = threading.Lock()
+        self.claimed = {}  # dev_index -> owner
+
+    def acquire(self, owner):
+        with self.lock:
+            cams = list_windows_cameras()
+            if not cams:  # None(pygrabber未導入) または [](0台)
+                return None
+            matched = [idx for idx, nm in cams
+                       if self.name_l in (nm or "").lower()][:self.max_count]
+            for idx in matched:
+                if idx not in self.claimed:
+                    self.claimed[idx] = owner
+                    return idx
+            return None
+
+    def release(self, owner):
+        with self.lock:
+            for idx in [k for k, v in self.claimed.items() if v == owner]:
+                del self.claimed[idx]
+
+
 class CameraThread(threading.Thread):
-    def __init__(self, device, width, height, fps, use_mjpeg, detect_noise, noise_threshold):
+    def __init__(self, label, width, height, fps, use_mjpeg, detect_noise, noise_threshold, source):
         super().__init__()
-        self.device = device
+        self.device = label   # 表示・ログ用ラベル
         self.width = width
         self.height = height
         self.fps = fps
         self.use_mjpeg = use_mjpeg
         self.detect_noise = detect_noise
         self.noise_threshold = noise_threshold
+        self.source = source  # DeviceSource: 開くデバイスの取得/解放を担う
         self.frame = None
         self.running = True
         self.daemon = True
@@ -64,31 +164,36 @@ class CameraThread(threading.Thread):
                 # 接続試行の間隔を確実に制限（切断されてから必ず3秒待つ）
                 if now - last_retry > retry_interval:
                     last_retry = now
-                    
-                    # 数値ならintに変換
-                    try:
-                        dev_id = int(self.device)
-                    except ValueError:
-                        dev_id = self.device
-                        
-                    print(f"[{self.device}] 接続を試みています...")
-                    cap = cv2.VideoCapture(dev_id)
+
+                    # 開くべきデバイスをソースから取得（固定/名前解決の差はソースが吸収）
+                    dev_id = self.source.acquire(self)
+                    if dev_id is None:
+                        # 利用可能なデバイスが今は無い（名前一致の空きが無い等）→ 待機して再試行
+                        with self.lock:
+                            self.frame = None
+                        cap = None
+                        time.sleep(0.5)
+                        continue
+
+                    print(f"[{self.device}] 接続を試みています... (dev={dev_id})")
+                    cap = cv2.VideoCapture(dev_id, CAPTURE_BACKEND)
                     if cap.isOpened():
                         # MJPEG設定 (Raspberry Piでの複数カメラ帯域不足対策に重要)
                         if self.use_mjpeg:
                             cap.set(cv2.CAP_PROP_FOURCC, cv2.VideoWriter_fourcc(*'MJPG'))
-                        
+
                         cap.set(cv2.CAP_PROP_FRAME_WIDTH, self.width)
                         cap.set(cv2.CAP_PROP_FRAME_HEIGHT, self.height)
                         cap.set(cv2.CAP_PROP_FPS, self.fps)
-                        print(f"[{self.device}] 接続成功")
+                        print(f"[{self.device}] 接続成功 (dev={dev_id})")
                         consecutive_failures = 0
                         noise_counter = 0
                         normal_counter = 0
                         self.is_noise_active = False
                     else:
                         cap = None
-                        print(f"[{self.device}] 接続失敗")
+                        self.source.release(self)  # 確保したデバイスを解放（固定ソースは何もしない）
+                        print(f"[{self.device}] 接続失敗 (dev={dev_id})")
                 
                 if cap is None:
                     time.sleep(0.5)
@@ -102,6 +207,7 @@ class CameraThread(threading.Thread):
                     print(f"[{self.device}] フレームの読み込みに連続して失敗しました ({consecutive_failures}回)。再接続します。")
                     cap.release()
                     cap = None
+                    self.source.release(self)  # 次回はソースから取り直す（名前ソースは再解決）
                     with self.lock:
                         self.frame = None
                         self.current_noise_val = 0.0
@@ -143,6 +249,7 @@ class CameraThread(threading.Thread):
 
         if cap is not None:
             cap.release()
+        self.source.release(self)
 
     def check_noise(self, frame):
         """画像が砂嵐（ランダムノイズ）または無信号黒画面かどうかを判定する"""
@@ -234,7 +341,29 @@ def main():
     elif args.windowed:
         config["fullscreen"] = False
 
-    devices = config["devices"]
+    # デバイスソースとラベルを決定する。
+    # - Windows + windows_device_name: 名前で動的解決するソースを全スレッドで共有。
+    #   起動後の切断/再接続や後付けカメラに追従し、インデックスへはフォールバックしない。
+    # - それ以外: config の devices を固定の index/path ソースとして使う。
+    max_slots = 4
+    device_name = config.get("windows_device_name", "")
+    if IS_WINDOWS and device_name:
+        cams = list_windows_cameras()
+        if cams is None:
+            print("デバイス名検索には pygrabber が必要です。'pip install pygrabber' を実行してください。",
+                  file=sys.stderr)
+            sys.exit(1)
+        print("--- 検出されたカメラ ---")
+        for idx, cam_name in cams:
+            print(f"  [{idx}] {cam_name}")
+        shared_source = NameResolvedSource(device_name, max_slots)
+        # スロットごとに同じ共有ソースを渡す。実インデックスは実行時に名前で解決される。
+        labels = [f"{device_name} #{i}" for i in range(max_slots)]
+        device_specs = [(label, shared_source) for label in labels]
+    else:
+        device_specs = [(str(dev), FixedDeviceSource(dev)) for dev in config["devices"]]
+
+    devices = [label for label, _ in device_specs]
     width = config["width"]
     height = config["height"]
     fps = config["fps"]
@@ -244,6 +373,7 @@ def main():
     noise_threshold = config["noise_threshold"]
 
     print("--- 起動設定 ---")
+    print(f"OS: {platform.system()} / バックエンド: {BACKEND_NAME}")
     print(f"デバイス: {devices}")
     print(f"解像度: {width}x{height} @ {fps}fps")
     print(f"MJPEG圧縮: {use_mjpeg}")
@@ -253,8 +383,9 @@ def main():
 
     # カメラキャプチャスレッドの起動
     threads = []
-    for dev in devices:
-        t = CameraThread(dev, width, height, fps, use_mjpeg, detect_noise, noise_threshold)
+    for label, source in device_specs:
+        t = CameraThread(label, width, height, fps, use_mjpeg, detect_noise, noise_threshold,
+                         source=source)
         t.start()
         threads.append(t)
 
