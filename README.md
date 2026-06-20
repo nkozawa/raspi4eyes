@@ -63,6 +63,8 @@ Ensure the virtual environment is active before running the script:
 
 ```bash
 # Make sure display env is specified, especially when starting via SSH
+# If needed, ensure XAUTHORITY is set
+export XAUTHORITY=~/.Xauthority
 DISPLAY=:0 python raspi4eyes.py
 ```
 *Specifying `DISPLAY=:0` is critical for OpenCV to access the X11/Wayland display server when executing from an SSH terminal or automated scripts.*
@@ -194,6 +196,8 @@ sudo apt install -y python3-opencv python3-numpy
 
 ```bash
 # SSH接続経由などで実行する場合、DISPLAYを指定して起動します
+# 必要に応じて、XAUTHORITYの設定が必要な場合があります
+export XAUTHORITY=~/.Xauthority
 DISPLAY=:0 python raspi4eyes.py
 ```
 *※ `DISPLAY=:0` の指定は、SSHターミナルや自動起動スクリプトからOpenCVを実行し、X11/Waylandディスプレイサーバー上にウィンドウを表示するために必須です。*
