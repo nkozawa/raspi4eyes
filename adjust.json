@@ -1,0 +1,18 @@
+{
+    "devices": [
+        "/dev/video0",
+        "/dev/video2",
+        "/dev/video4",
+        "/dev/video6"
+    ],
+    "width": 640,
+    "height": 480,
+    "fps": 30,
+    "fullscreen": true,
+    "use_mjpeg": true,
+    "show_no_signal_text": true,
+    "detect_noise": true,
+    "noise_threshold": 0,
+    "target_width": 1920,
+    "target_height": 1080
+}

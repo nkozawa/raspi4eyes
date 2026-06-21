@@ -100,6 +100,9 @@ DISPLAY=:0 python raspi4eyes.py
 # Force windowed mode (overrides config.json)
 DISPLAY=:0 python raspi4eyes.py --windowed
 
+# Use adjust.json for receiver frequency adjustment (noise_threshold=0)
+DISPLAY=:0 python raspi4eyes.py --config adjust.json
+
 # Show real-time noise measurements for calibration
 DISPLAY=:0 python raspi4eyes.py --debug-noise
 ```
@@ -272,6 +275,9 @@ DISPLAY=:0 python raspi4eyes.py
 ```bash
 # ウィンドウ表示で起動する（config.jsonの設定より優先）
 DISPLAY=:0 python raspi4eyes.py --windowed
+
+# adjust.jsonを使用して起動する (noise_thresholdを0に設定。受信機の周波数調整時に使用)
+DISPLAY=:0 python raspi4eyes.py --config adjust.json
 
 # 砂嵐検知用の測定数値をリアルタイム表示する（閾値の調整用）
 DISPLAY=:0 python raspi4eyes.py --debug-noise
