@@ -101,10 +101,10 @@ Wants=seatd.service
 [Service]
 Type=simple
 User=pi
-WorkingDirectory=/Users/kozawa/src/raspi4eyes
+WorkingDirectory=/home/pi/raspi4eyes
 # PAMセッションを開始し、XDG_RUNTIME_DIRなどの環境変数を自動生成させる
 PAMName=login
-ExecStart=/usr/bin/cage -s -- /Users/kozawa/src/raspi4eyes/run.sh
+ExecStart=/usr/bin/cage -s -- /home/pi/raspi4eyes/run.sh
 Environment=WLR_LOG_LEVEL=error
 Restart=always
 RestartSec=5

@@ -101,10 +101,10 @@ Wants=seatd.service
 [Service]
 Type=simple
 User=pi
-WorkingDirectory=/Users/kozawa/src/raspi4eyes
+WorkingDirectory=/home/pi/raspi4eyes
 # Start a PAM session to automatically generate XDG_RUNTIME_DIR and other env vars
 PAMName=login
-ExecStart=/usr/bin/cage -s -- /Users/kozawa/src/raspi4eyes/run.sh
+ExecStart=/usr/bin/cage -s -- /home/pi/raspi4eyes/run.sh
 Environment=WLR_LOG_LEVEL=error
 Restart=always
 RestartSec=5
