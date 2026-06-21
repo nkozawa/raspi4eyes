@@ -36,7 +36,7 @@ To allow the user to control physical graphics devices and start a display sessi
 
 ## 3. Create the Startup Script
 
-Specifying custom resolutions (like `1280x960`) via `cmdline.txt` at boot time can cause the screen to shift significantly to the right due to HDMI timing mismatches. To prevent this, we use a startup script (`run.sh`) that dynamically applies the correct timing via `wlr-randr` after the compositor has fully loaded.
+Instead of forcing a specific OS resolution (which can cause issues with HDMI reconnection or timing), we now keep the OS resolution at the monitor's recommended setting (e.g., 1920x1080) and let the application scale the output.
 
 ### Content of `run.sh`
 The script has already been created in your project directory with the following content:
@@ -44,15 +44,7 @@ The script has already been created in your project directory with the following
 ```bash
 #!/bin/bash
 
-# 1. Wait for Cage to initialize (2 seconds) and then dynamically apply the resolution
-(
-  sleep 2
-  # Try applying resolution to both HDMI output ports (applies only to the connected port)
-  WAYLAND_DISPLAY=wayland-0 wlr-randr --output HDMI-A-1 --mode 1280x960@60 2>/dev/null
-  WAYLAND_DISPLAY=wayland-0 wlr-randr --output HDMI-A-2 --mode 1280x960@60 2>/dev/null
-) &
-
-# 2. Start the Python program using the virtual environment
+# Start the Python program using the virtual environment
 cd "$(dirname "$0")"
 .venv/bin/python raspi4eyes.py --fullscreen
 ```

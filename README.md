@@ -125,7 +125,9 @@ On the first execution, `config.json` will be automatically generated.
     "use_mjpeg": true,
     "show_no_signal_text": true,
     "detect_noise": true,
-    "noise_threshold": 0.4
+    "noise_threshold": 0.4,
+    "target_width": 1920,
+    "target_height": 1080
 }
 ```
 *On Windows, the generated `devices` default to numeric indices (`[0, 1, 2, 3]`) and a `"windows_device_name"` key is added (see below).*
@@ -141,6 +143,7 @@ On the first execution, `config.json` will be automatically generated.
 | `use_mjpeg` | Request MJPEG compression to save USB bandwidth. | `true` |
 | `detect_noise` | Automatically detect static noise and blackout the grid. | `true` |
 | `noise_threshold` | Threshold ratio for static noise detection (`0.0` - `1.0`). | `0.4` |
+| `target_width` / `target_height` | Force resize the final grid output to this resolution (useful for stretching 4:3 feeds to a 16:9 monitor without borders). If `0`, no resizing is performed. | `0` / `0` |
 
 > **Windows device selection**: When `windows_device_name` is set, the app lists all DirectShow cameras at startup, selects up to 4 whose name contains that string, and keeps **following them by name at runtime** (handling reconnects and cameras plugged in later). It does **not** fall back to numeric indices. Set `windows_device_name` to `""` to use the numeric `devices` list instead.
 
@@ -152,9 +155,10 @@ On the first execution, `config.json` will be automatically generated.
 Drone video transmitters (VTX) emit powerful signals on the **5.8GHz band**. If your Raspberry Pi is connected to the network via **5GHz Wi-Fi**, the close proximity of VTX antennas can completely blind the Pi's Wi-Fi chip, resulting in lost SSH connections.
 - **Recommendation**: Always use a **wired Ethernet connection** for test environments and live events to guarantee system stability.
 
-### 2. Resolution Settings for Image Recognition (FPVTrackSide)
-When piping this tiled output into timing systems like **FPVTrackSide** for ArUco marker tracking, image clarity is critical.
-- **Best Practice**: To maximize tracking accuracy, choose a screen resolution that prevents scaling distortions. A resolution of **`1280x960 @ 60Hz`** is highly recommended. Because it has a 4:3 aspect ratio, the four 640x480 native feeds fit perfectly into a 2x2 grid without stretching or loss of pixel integrity.
+### 2. Resolution Settings & Screen Stretching (FPVTrackSide)
+By default, the 2x2 grid yields an aspect ratio of **4:3 (1280x960)**.
+- **For strict 4:3 aspect ratio (e.g., FPVTrackSide ArUco tracking)**: To prevent distortion, keep the display output at a 4:3 resolution (like `1280x960 @ 60Hz`) and leave `target_width`/`target_height` as `0` in `config.json`.
+- **For stretched fullscreen display without borders (16:9 monitor)**: If you want the grid to fill your 1080p widescreen monitor completely (like an HDZero Event VRX setup), set `"target_width": 1920` and `"target_height": 1080` in `config.json`, and run the system with your monitor's native 1080p resolution. The program will automatically scale the output to fill the screen without leaving black side-borders, remaining extremely stable even across HDMI hotplugs.
 
 ### 3. Tuning the Noise Threshold
 The noise logic measures the contrast ratio before and after blurring the frame.
@@ -294,7 +298,9 @@ DISPLAY=:0 python raspi4eyes.py --debug-noise
     "use_mjpeg": true,
     "show_no_signal_text": true,
     "detect_noise": true,
-    "noise_threshold": 0.4
+    "noise_threshold": 0.4,
+    "target_width": 1920,
+    "target_height": 1080
 }
 ```
 *※ Windows では `devices` の既定値が数値インデックス（`[0, 1, 2, 3]`）になり、`"windows_device_name"` キーが追加されます（下記参照）。*
@@ -310,6 +316,7 @@ DISPLAY=:0 python raspi4eyes.py --debug-noise
 | `use_mjpeg` | USB帯域幅を節約するため、MJPEG圧縮を要求するか。 | `true` |
 | `detect_noise` | 砂嵐（ノイズ）の検知・自動黒画面化を有効にするか。 | `true` |
 | `noise_threshold` | 砂嵐を判定する閾値比率（`0.0` 〜 `1.0`）。 | `0.4` |
+| `target_width` / `target_height` | 最終的な結合画面をこの解像度に強制リサイズします（16:9モニター等で黒帯なしで画面いっぱいに引き伸ばしたい場合に指定）。`0` の場合はリサイズしません。 | `0` / `0` |
 
 > **Windowsのデバイス選択**: `windows_device_name` を設定すると、起動時に全 DirectShow カメラを列挙し、名前にその文字列を含むカメラを最大4台選択して、**実行時も名前で追従**します（再接続や後から接続したカメラにも対応）。インデックス番号へはフォールバックしません。数値の `devices` を使いたい場合は `windows_device_name` を `""` にしてください。
 
@@ -321,9 +328,13 @@ DISPLAY=:0 python raspi4eyes.py --debug-noise
 ドローンの映像送信機（VTX）は極めて強力な **5.8GHz帯** の電波を発信します。Raspberry PiへのSSH接続などに **5GHz帯のWi-Fi** を使用している場合、機体が近づいた際にWi-Fiモジュールが強烈な電波干渉を受け、SSH接続が完全に切断されてしまう場合があります。
 - **推奨対策**: 安定した運用およびテストのために、実戦・イベントでの使用時は必ず **有線LAN（イーサネット）** で接続することを強く推奨します。
 
-### 2. 画像判定（FPVTrackSide）のための解像度設定について
-出力映像を **FPVTrackSide** 等に入力してArUcoマーカーの画像認識を行う場合、アスペクト比の歪みや引き伸ばしがあると、マーカーの検出精度が著しく低下します。
-- **推奨解像度**: アスペクト比が 4:3 になる **`1280x960 @ 60Hz`** をディスプレイ解像度に設定することを強く推奨します。これにより、EACHINE ROTG01 PROのネイティブ解像度である 640x480 映像が引き伸ばされることなく、ドット・バイ・ドットで2x2グリッドにピッタリと配置され、最高の認識精度を得ることができます。
+### 2. 画面解像度と引き伸ばし（アスペクト比）の設定について
+デフォルトでは、2x2の配置により **4:3（1280x960）** の比率で画面が結合されます。これを 16:9 などのモニターにどのように表示するかを設定できます。
+
+- **歪みのない正確な4:3比率で表示したい場合（FPVTrackSideでの計測など）**:
+  マーカーの認識精度を最大にするため、ディスプレイの出力解像度自体を 4:3 の `1280x960 @ 60Hz` に設定し、`config.json` の `target_width` / `target_height` は `0`（リサイズなし）のままにしてください。
+- **黒帯なしで画面全体（16:9）にいっぱいに引き伸ばして表示したい場合（HDZero風の表示など）**:
+  ラズパイの画面解像度設定はモニターの標準解像度（例: `1920x1080`）のままで起動し、`config.json` に `"target_width": 1920`、`"target_height": 1080` を指定します。プログラム側が自動で画面全体に引き伸ばして描画するため、HDMIの抜き差し等が発生しても黒帯が出ず、常に画面いっぱいに表示され安定します。
 
 ### 3. 砂嵐（ノイズ）閾値の調整について
 本プログラムのノイズ検知は、画像を強くぼかした前後のコントラスト比を算出しています。

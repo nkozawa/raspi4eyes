@@ -12,5 +12,7 @@
     "use_mjpeg": true,
     "show_no_signal_text": true,
     "detect_noise": true,
-    "noise_threshold": 0.4
+    "noise_threshold": 0.4,
+    "target_width": 1920,
+    "target_height": 1080
 }

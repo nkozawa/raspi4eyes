@@ -36,7 +36,7 @@ SSH接続などの非ログイン端末から物理グラフィックスデバ�
 
 ## 3. 起動スクリプトの準備
 
-`cmdline.txt`による起動時の画面サイズ指定では、HDMI信号のタイミング不一致により画面が右に大きくズレる現象が発生します。これを防ぐため、起動後に `wlr-randr` を走らせて自動的に解像度を変更するスクリプト（`run.sh`）を使用します。
+`cmdline.txt` による解像度変更は、HDMI接続の安定性に影響を与える可能性があるため、OS側はモニター推奨の解像度（1920x1080 など）を維持し、プログラム側で描画サイズを拡大して出力する方式を採用しています。これにより、HDMIの抜き差し時でも解像度が変わらず、非常に安定してフルスクリーン表示を維持できます。
 
 ### run.sh の内容
 すでに `run.sh` は作成済みですが、内容は以下のようになっています。
@@ -44,15 +44,7 @@ SSH接続などの非ログイン端末から物理グラフィックスデバ�
 ```bash
 #!/bin/bash
 
-# 1. バックグラウンドでCageの起動完了（2秒）を待ってから、解像度を変更する処理
-(
-  sleep 2
-  # 両方のポートに対して解像度設定を試みる（接続されている方だけ適用されます）
-  WAYLAND_DISPLAY=wayland-0 wlr-randr --output HDMI-A-1 --mode 1280x960@60 2>/dev/null
-  WAYLAND_DISPLAY=wayland-0 wlr-randr --output HDMI-A-2 --mode 1280x960@60 2>/dev/null
-) &
-
-# 2. Pythonプログラムを実行 (仮想環境のPythonを呼び出す)
+# Pythonプログラムを実行 (仮想環境のPythonを呼び出す)
 cd "$(dirname "$0")"
 .venv/bin/python raspi4eyes.py --fullscreen
 ```

@@ -371,6 +371,8 @@ def main():
     show_no_signal = config["show_no_signal_text"]
     detect_noise = config["detect_noise"]
     noise_threshold = config["noise_threshold"]
+    target_width = config.get("target_width", 0)
+    target_height = config.get("target_height", 0)
 
     print("--- Startup Settings ---")
     print(f"OS: {platform.system()} / Backend: {BACKEND_NAME}")
@@ -458,6 +460,12 @@ def main():
             top_row = np.hstack((frames[0], frames[1]))
             bottom_row = np.hstack((frames[2], frames[3]))
             grid_frame = np.vstack((top_row, bottom_row))
+
+            # ターゲット解像度が設定されている場合は強制リサイズ（引き伸ばし用）
+            # Force resize if target resolution is specified (for stretched display)
+            if target_width > 0 and target_height > 0:
+                if grid_frame.shape[1] != target_width or grid_frame.shape[0] != target_height:
+                    grid_frame = cv2.resize(grid_frame, (target_width, target_height))
 
             # 表示 / Display
             cv2.imshow(window_name, grid_frame)
