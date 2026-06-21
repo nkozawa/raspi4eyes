@@ -164,6 +164,15 @@ If your receivers fail to blackout or get stuck on a black screen, run with `--d
 
 ---
 
+## Headless & Turnkey System Documentation
+
+For production environments where the Raspberry Pi runs without a desktop environment (headless) and serves as an autonomous display receiver (turnkey system), refer to the following guides in the `doc/` directory:
+
+- [**Cage Setup Guide (Headless Execution)**](doc/cage_setup_guide_en.md): Detailed configuration to launch `raspi4eyes` using the Cage Wayland kiosk compositor directly on the DRM/KMS backend (X11/Wayland-free setup, resolving screen shift issues, and systemd service creation).
+- [**OverlayFS Setup Guide (Turnkey System Protection)**](doc/overlayfs_setup_guide_en.md): Steps to enable a read-only filesystem (OverlayFS) to protect the SD card from corruption when powering down without a safe shutdown.
+
+---
+
 # 日本語
 
 Raspberry Piで最大4つのUVCビデオ入力（EACHINE ROTG01 PROなどのFPVドローン用受信機）をキャプチャし、HDMI出力に2x2のグリッド配置で並べて表示するPythonプログラムです。  
@@ -321,3 +330,12 @@ DISPLAY=:0 python raspi4eyes.py --debug-noise
 - **砂嵐 / 無信号のとき**: ぼかすと明暗差が消滅するため、比率は **`0.01 〜 0.07`** のように極小になります。
 - **正常映像のとき**: ぼかしても全体的な明暗差が残るため、比率は **`0.60 〜 0.85`** 程度になります。
 受信機が黒画面に切り替わらない場合や、逆に正常な映像が映らない場合は、`--debug-noise` オプションで数値を観察し、`config.json` の `"noise_threshold"` を微調整してください（初期値: `0.4`）。
+
+---
+
+## ヘッドレス・ターンキーシステム向けドキュメント
+
+X11/Waylandデスクトップ環境を起動しないヘッドレス運用や、電源ボタン長押し等での直抜き対応（ターンキーシステム）を構築するための詳細手順書を `doc/` ディレクトリに同梱しています。
+
+- [**Cage導入・ヘッドレス起動手順書**](doc/cage_setup_guide_ja.md): 超軽量Waylandコンポジタ「Cage」を使用してDRM/KMS上で直接映像出力する設定、画面ズレの対策、および `systemd` によるOS自動起動サービス化の手順。
+- [**OverlayFS（リードオンリー化）設定手順書**](doc/overlayfs_setup_guide_ja.md): 突然の電源オフでもSDカードのファイルシステムが破損しないよう、`raspi-config` からOverlay File Systemを有効化・無効化する手順。
