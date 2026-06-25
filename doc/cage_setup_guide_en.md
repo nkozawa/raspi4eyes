@@ -34,7 +34,33 @@ To allow the user to control physical graphics devices and start a display sessi
 
 ---
 
-## 3. Create the Startup Script
+## 3. Build a Python Virtual Environment (venv)
+It is recommended to run the script inside a Python Virtual Environment (`venv`) to avoid package conflicts on Raspberry Pi OS.
+
+```bash
+# Clone the repository and navigate into it
+cd ~/rasp4eyes
+
+# Create a virtual environment named '.venv'
+python3 -m venv .venv
+
+# Activate the virtual environment
+source .venv/bin/activate
+```
+
+---
+
+## 4. Install Dependencies
+Install the required packages (`opencv-python` and `numpy`) inside the active virtual environment:
+
+```bash
+pip install -r requirements.txt
+```
+
+
+---
+
+## 5. Create the Startup Script
 
 Instead of forcing a specific OS resolution (which can cause issues with HDMI reconnection or timing), we now keep the OS resolution at the monitor's recommended setting (e.g., 1920x1080) and let the application scale the output.
 
@@ -56,7 +82,7 @@ chmod +x run.sh
 
 ---
 
-## 4. Run the Application (Manual Run)
+## 6. Run the Application (Manual Run)
 
 Once setup is complete, execute the script with `cage`:
 
@@ -72,7 +98,7 @@ WLR_LOG_LEVEL=error cage -- ./run.sh
 
 ---
 
-## 5. Configure Automatic Startup on Boot (systemd service)
+## 7. Configure Automatic Startup on Boot (systemd service)
 
 To automatically launch `Cage` and `raspi4eyes` on system startup, configure a `systemd` service.
 
@@ -135,7 +161,7 @@ journalctl -u raspi4eyes.service -f
 
 ---
 
-## 6. Troubleshooting
+## 8. Troubleshooting
 
 ### Q1: `Could not open target tty: Permission denied`
 * **Cause**: The group membership changes have not taken effect, or additional TTY permissions are needed.
